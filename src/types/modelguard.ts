@@ -45,14 +45,29 @@ export interface InferenceResult {
   imageThumbnailUrl?: string;
 }
 
+export type DriftMethod = 'KS_TEST' | 'MMD' | 'PSI_WASSERSTEIN';
+export type DriftStatus = 'STABLE' | 'MODERATE_DRIFT' | 'SEVERE_DRIFT' | 'INSUFFICIENT_SAMPLES';
+
 export interface DriftMetric {
   featureName: string;
+  method: DriftMethod;
   baselineMean: number;
   currentMean: number;
+  referenceSampleCount: number;
+  currentSampleCount: number;
+  // Kolmogorov-Smirnov statistics
+  ksStatistic: number; // D statistic in [0, 1]
+  ksPValue: number; // asymptotic p-value
+  // Maximum Mean Discrepancy statistics
+  mmdScore: number; // empirical MMD distance
+  mmdThreshold: number; // statistical threshold based on alpha and sample sizes
+  // Additional distance metrics
   wassersteinDistance: number;
   psi: number; // Population Stability Index
-  status: 'STABLE' | 'MODERATE_DRIFT' | 'SEVERE_DRIFT';
+  status: DriftStatus;
   threshold: number;
+  alpha: number; // significance level, e.g. 0.05
+  interpretation: string;
 }
 
 export type AlertType = 'LOW_CONFIDENCE' | 'DATA_DRIFT' | 'WEATHER_ANOMALY' | 'SYSTEM_LATENCY';
@@ -87,6 +102,7 @@ export interface HumanReviewSample {
   reviewedAt?: string;
   status: 'PENDING' | 'ACCEPTED' | 'OVERRIDDEN' | 'REJECTED';
   sendToRetraining: boolean;
+  retrainingJobId?: string;
 }
 
 export interface ModelVersion {
@@ -102,12 +118,14 @@ export interface ModelVersion {
   driftToleranceScore: number;
   deployedAt: string;
   changelog: string;
+  mlflowRunId?: string;
 }
 
 export interface RetrainingJob {
   id: string;
   triggerSource: 'MANUAL' | 'AUTO_DRIFT_THRESHOLD' | 'HUMAN_REVIEW_BATCH';
   startedAt: string;
+  completedAt?: string;
   status: 'IDLE' | 'QUEUED' | 'TRAINING' | 'VALIDATING' | 'COMPLETED' | 'FAILED';
   currentEpoch: number;
   totalEpochs: number;
@@ -115,8 +133,18 @@ export interface RetrainingJob {
   trainLoss: number;
   valLoss: number;
   mAPDelta: number;
+  accuracyDelta: number;
   newSamplesCount: number;
   candidateVersion: string;
+  mlflowRunId?: string;
+  errorMessage?: string;
+  validationReport?: {
+    baselineAccuracy: number;
+    candidateAccuracy: number;
+    baselineMAP: number;
+    candidateMAP: number;
+    passedPromotionCriteria: boolean;
+  };
 }
 
 export interface ReferenceDataset {
@@ -129,4 +157,26 @@ export interface ReferenceDataset {
   meanContrast: number;
   meanSharpness: number;
   commonClasses: string[];
+}
+
+export interface MLflowRun {
+  runId: string;
+  experimentId: string;
+  runName: string;
+  status: 'RUNNING' | 'FINISHED' | 'FAILED' | 'KILLED';
+  startTime: number;
+  endTime?: number;
+  params: Record<string, string>;
+  metrics: Record<string, number>;
+  tags: Record<string, string>;
+  artifactUri: string;
+}
+
+export interface MLflowExperiment {
+  experimentId: string;
+  name: string;
+  artifactLocation: string;
+  lifecycleStage: string;
+  creationTime: number;
+  lastUpdateTime: number;
 }

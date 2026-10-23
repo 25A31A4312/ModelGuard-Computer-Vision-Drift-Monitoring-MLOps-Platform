@@ -9,6 +9,8 @@ import {
   Eye,
   Send,
   Database,
+  Download,
+  Image as ImageIcon,
 } from 'lucide-react';
 import type { HumanReviewSample } from '../types/modelguard.ts';
 import { api } from '../services/api.ts';
@@ -26,6 +28,8 @@ export const HumanReviewView: React.FC<HumanReviewViewProps> = ({
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [overrideInput, setOverrideInput] = useState<string>('');
+  const [brokenImages, setBrokenImages] = useState<Record<string, boolean>>({});
+  const [isExporting, setIsExporting] = useState<boolean>(false);
 
   const pendingItems = queue.filter((item) => item.status === 'PENDING');
   const retrainCandidates = queue.filter((item) => item.sendToRetraining);
@@ -71,6 +75,21 @@ export const HumanReviewView: React.FC<HumanReviewViewProps> = ({
     }
   };
 
+  const handleImageError = (id: string) => {
+    setBrokenImages((prev) => ({ ...prev, [id]: true }));
+  };
+
+  const handleExportCSV = async () => {
+    setIsExporting(true);
+    try {
+      await api.downloadAuditCSV();
+    } catch (err) {
+      console.error('Failed to export CSV:', err);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header Banner */}
@@ -86,13 +105,21 @@ export const HumanReviewView: React.FC<HumanReviewViewProps> = ({
               </h2>
             </div>
             <p className="text-xs text-slate-400 mt-1 max-w-2xl">
-              Curate edge cases, address high-entropy predictions from adverse weather, and verify ground truth annotations before committing to retraining batches.
+              Curate edge cases, verify adverse weather predictions, correct ground truth annotations, and flag validated samples for automated active-learning retraining.
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            <span className="px-3 py-1 rounded-xl bg-slate-950 border border-slate-800 text-xs font-mono text-slate-300">
-              Approved for Retraining:{' '}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleExportCSV}
+              disabled={isExporting}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 cursor-pointer disabled:opacity-50"
+            >
+              <Download className="w-3.5 h-3.5 text-emerald-400" />
+              <span>{isExporting ? 'Exporting...' : 'Export Audit CSV'}</span>
+            </button>
+            <span className="px-3 py-1.5 rounded-full bg-slate-950 border border-slate-800 text-xs font-mono text-slate-300">
+              Retraining Ready:{' '}
               <strong className="text-emerald-400">{retrainCandidates.length}</strong>
             </span>
           </div>
@@ -109,6 +136,15 @@ export const HumanReviewView: React.FC<HumanReviewViewProps> = ({
           queue.map((item) => {
             const isPending = item.status === 'PENDING';
             const isEditing = editingId === item.id;
+            const isImageBroken = brokenImages[item.id];
+
+            // Resolve robust image fallback if remote URL fails or is empty
+            const resolvedImgSrc =
+              !isImageBroken && item.imageUrl && item.imageUrl.trim() !== ''
+                ? item.imageUrl
+                : item.driftReason?.toLowerCase().includes('fog')
+                ? '/api/samples/foggy-highway.jpg'
+                : '/api/samples/daylight-sports-car.jpg';
 
             return (
               <div
@@ -122,17 +158,17 @@ export const HumanReviewView: React.FC<HumanReviewViewProps> = ({
                 <div className="flex flex-col md:flex-row items-start justify-between gap-4">
                   {/* Left: Thumbnail & Details */}
                   <div className="flex items-start gap-4">
-                    {item.imageUrl ? (
+                    <div className="w-24 h-24 rounded-xl overflow-hidden bg-slate-950 border border-slate-700 shrink-0 relative group">
                       <img
-                        src={item.imageUrl}
+                        src={resolvedImgSrc}
                         alt="review target"
-                        className="w-24 h-24 rounded-xl object-cover bg-slate-950 border border-slate-700 shrink-0"
+                        onError={() => handleImageError(item.id)}
+                        className="w-full h-full object-cover transition-transform group-hover:scale-105"
                       />
-                    ) : (
-                      <div className="w-24 h-24 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-center text-slate-500 text-xs shrink-0">
-                        Image Stored
-                      </div>
-                    )}
+                      <span className="absolute bottom-1 right-1 px-1 py-0.5 rounded text-[8px] font-mono bg-slate-950/80 text-slate-300">
+                        {item.detectedCount} obj
+                      </span>
+                    </div>
 
                     <div className="space-y-1.5">
                       <div className="flex items-center gap-2">

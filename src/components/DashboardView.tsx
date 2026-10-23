@@ -12,9 +12,11 @@ import {
   FileCheck,
   CheckCircle2,
   XCircle,
+  Download,
 } from 'lucide-react';
 import type { AlertItem, DriftMetric, InferenceResult, ModelVersion } from '../types/modelguard.ts';
 import type { ActiveTab } from './Navbar.tsx';
+import { api } from '../services/api.ts';
 
 interface DashboardViewProps {
   inferences: InferenceResult[];
@@ -67,6 +69,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => api.downloadAuditCSV()}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs md:text-sm font-semibold border border-slate-700 transition-all cursor-pointer shadow-sm"
+            >
+              <Download className="w-4 h-4 text-emerald-400" />
+              <span>Export Audit CSV</span>
+            </button>
             <button
               onClick={() => setActiveTab('inference')}
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 text-xs md:text-sm font-semibold transition-all shadow-lg shadow-emerald-500/20 cursor-pointer"
@@ -238,10 +247,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   />
                 </div>
 
-                <div className="flex items-center justify-between text-[11px] text-slate-500 font-mono">
-                  <span>Baseline: {metric.baselineMean}</span>
-                  <span>Current: {metric.currentMean}</span>
-                  <span>W-Dist: {metric.wassersteinDistance}</span>
+                <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono">
+                  <span>KS p: {metric.ksPValue < 0.001 ? '<0.001' : metric.ksPValue.toFixed(3)}</span>
+                  <span>MMD: {metric.mmdScore.toFixed(3)}</span>
+                  <span>N: {metric.currentSampleCount}</span>
                 </div>
               </div>
             ))}

@@ -20,6 +20,23 @@ function getAiClient(): GoogleGenAI | null {
   return aiInstance;
 }
 
+const normalizeCoord = (c: any): number => {
+  const val = Number(c) || 0;
+  if (val > 1.0) {
+    return Math.min(1.0, Math.max(0.0, Number((val / 1000).toFixed(4))));
+  }
+  return Math.min(1.0, Math.max(0.0, Number(val.toFixed(4))));
+};
+
+const parseQualityMetric = (val: any, defaultVal: number, maxExpected: number = 100): number => {
+  const n = Number(val);
+  if (isNaN(n)) return defaultVal;
+  if (n <= 1.0 && maxExpected > 1) {
+    return Math.round(n * maxExpected);
+  }
+  return Math.round(n);
+};
+
 export async function runServerInference(
   imageBase64: string,
   mimeType: string = 'image/jpeg',
@@ -32,23 +49,25 @@ export async function runServerInference(
 
   // Strip prefix data URI if present
   const cleanBase64 = imageBase64.replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, '');
-
   const startTime = Date.now();
 
   try {
     if (modelType === 'traffic_object_detector') {
-      const prompt = `You are a production Computer Vision Traffic & Autonomous Driving Object Detector (e.g. YOLO/Faster-RCNN trained on Cityscapes and COCO).
+      const prompt = `You are a production Computer Vision Traffic & Autonomous Driving Object Detector (YOLOv8 architecture trained on COCO and Cityscapes).
 Analyze this image and identify all traffic actors and objects: cars, trucks, buses, pedestrians, motorcycles, bicycles, traffic lights, and road signs.
-Provide normalized coordinates [ymin, xmin, ymax, xmax] between 0.0 and 1.0 for each detected object.
+For each detected object provide:
+- label (e.g. 'car', 'truck', 'traffic light', 'pedestrian')
+- confidence score between 0.0 and 1.0
+- normalized bounding box coordinates strictly between 0.0 and 1.0: ymin, xmin, ymax, xmax (e.g. 0.25, 0.40)
 Also assess physical image quality metrics:
-- brightness (0-255, where 128 is balanced)
+- brightness (0-255)
 - contrast (0-100)
 - sharpness (0-100, where low values <30 indicate blur or dense fog/rain)
 - fogProbability (0.0 to 1.0)
 - drift reason if foggy or degraded.`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
+        model: 'gemini-3.5-flash-lite',
         contents: [
           {
             role: 'user',
@@ -110,13 +129,18 @@ Also assess physical image quality metrics:
       const topObjects = (parsed.objects || []).map((o: any) => ({
         label: String(o.label).toLowerCase(),
         confidence: Math.min(0.99, Math.max(0.1, Number(o.confidence) || 0.85)),
-        ymin: Math.max(0, Math.min(1, Number(o.ymin) || 0)),
-        xmin: Math.max(0, Math.min(1, Number(o.xmin) || 0)),
-        ymax: Math.max(0, Math.min(1, Number(o.ymax) || 1)),
-        xmax: Math.max(0, Math.min(1, Number(o.xmax) || 1)),
+        ymin: normalizeCoord(o.ymin),
+        xmin: normalizeCoord(o.xmin),
+        ymax: normalizeCoord(o.ymax),
+        xmax: normalizeCoord(o.xmax),
       }));
 
       const topConfidence = topObjects.length > 0 ? topObjects[0].confidence : 0.72;
+      const brightness = parseQualityMetric(parsed.quality?.brightness, 120, 255);
+      const contrast = parseQualityMetric(parsed.quality?.contrast, 50, 100);
+      const sharpness = parseQualityMetric(parsed.quality?.sharpness, 65, 100);
+      const rawFog = Number(parsed.quality?.fogProbability ?? 0.05);
+      const fogProbability = Number((rawFog > 1.0 ? rawFog / 100 : rawFog).toFixed(2));
 
       return {
         id: `inf-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -135,16 +159,16 @@ Also assess physical image quality metrics:
         })),
         detectedObjects: topObjects,
         qualityMetrics: {
-          brightness: Math.round(parsed.quality?.brightness ?? 120),
-          contrast: Math.round(parsed.quality?.contrast ?? 50),
-          sharpness: Math.round(parsed.quality?.sharpness ?? 65),
-          fogProbability: Number((parsed.quality?.fogProbability ?? 0.05).toFixed(2)),
+          brightness,
+          contrast,
+          sharpness,
+          fogProbability,
           resolution: { width: 1280, height: 720 },
         },
         driftFlags: {
           isLowConfidence: parsed.isLowConfidence || topConfidence < 0.6,
-          isDriftSuspect: parsed.isDriftSuspect || (parsed.quality?.fogProbability > 0.45) || (parsed.quality?.sharpness < 30),
-          reason: parsed.driftReason || (parsed.quality?.fogProbability > 0.4 ? 'Adverse weather (fog/reduced visibility) detected' : undefined),
+          isDriftSuspect: parsed.isDriftSuspect || fogProbability > 0.45 || sharpness < 30,
+          reason: parsed.driftReason || (fogProbability > 0.4 ? 'Adverse weather (fog/reduced visibility) detected' : undefined),
         },
         latencyMs: latency,
       };
@@ -153,13 +177,12 @@ Also assess physical image quality metrics:
       const prompt = `You are a production ResNet-18 Computer Vision Image Classifier trained on ImageNet-1k.
 Analyze the image and provide the legitimate ImageNet classification categories.
 CRITICAL MLOps Constraint:
-Do NOT produce absurd classification offsets (such as confusing a car or foggy roadway for 'trilobite', 'tench', or sea creatures).
 Identify the true primary subject (e.g. 'sports car', 'station wagon', 'convertible', 'minivan', 'cab', 'street sign', 'traffic light', etc.).
 Provide the top 5 predicted classes with realistic softmax-like probabilities summing to 1.0.
 Estimate physical image metrics: brightness (0-255), contrast (0-100), sharpness (0-100), fogProbability (0-1).`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
+        model: 'gemini-3.5-flash-lite',
         contents: [
           {
             role: 'user',
@@ -222,6 +245,11 @@ Estimate physical image metrics: brightness (0-255), contrast (0-100), sharpness
       }));
 
       const primaryConfidence = Number(parsed.confidence) || (topClasses[0]?.confidence ?? 0.88);
+      const brightness = parseQualityMetric(parsed.quality?.brightness, 125, 255);
+      const contrast = parseQualityMetric(parsed.quality?.contrast, 55, 100);
+      const sharpness = parseQualityMetric(parsed.quality?.sharpness, 60, 100);
+      const rawFog = Number(parsed.quality?.fogProbability ?? 0.08);
+      const fogProbability = Number((rawFog > 1.0 ? rawFog / 100 : rawFog).toFixed(2));
 
       return {
         id: `inf-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -236,16 +264,16 @@ Estimate physical image metrics: brightness (0-255), contrast (0-100), sharpness
         topClasses,
         detectedObjects: [],
         qualityMetrics: {
-          brightness: Math.round(parsed.quality?.brightness ?? 125),
-          contrast: Math.round(parsed.quality?.contrast ?? 55),
-          sharpness: Math.round(parsed.quality?.sharpness ?? 60),
-          fogProbability: Number((parsed.quality?.fogProbability ?? 0.08).toFixed(2)),
+          brightness,
+          contrast,
+          sharpness,
+          fogProbability,
           resolution: { width: 800, height: 600 },
         },
         driftFlags: {
           isLowConfidence: parsed.isLowConfidence || primaryConfidence < 0.6,
-          isDriftSuspect: parsed.isDriftSuspect || (parsed.quality?.fogProbability > 0.45) || (parsed.quality?.sharpness < 30),
-          reason: parsed.driftReason || (parsed.quality?.fogProbability > 0.4 ? 'Adverse weather/fog causing high prediction entropy' : undefined),
+          isDriftSuspect: parsed.isDriftSuspect || fogProbability > 0.45 || sharpness < 30,
+          reason: parsed.driftReason || (fogProbability > 0.4 ? 'Adverse weather/fog causing high prediction entropy' : undefined),
         },
         latencyMs: latency,
       };

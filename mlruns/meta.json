@@ -1,0 +1,98 @@
+{
+  "experiments": [
+    {
+      "experimentId": "exp-001",
+      "name": "modelguard-cv-drift-monitoring",
+      "artifactLocation": "/app/applet/mlruns/exp-001",
+      "lifecycleStage": "active",
+      "creationTime": 1791549193662,
+      "lastUpdateTime": 1792758793662
+    }
+  ],
+  "runs": [
+    {
+      "runId": "run-resnet18-baseline-v1",
+      "experimentId": "exp-001",
+      "runName": "resnet18-imagenet-baseline",
+      "status": "FINISHED",
+      "startTime": 1791549193662,
+      "endTime": 1791549613662,
+      "params": {
+        "backbone": "ResNet-18",
+        "pretrained": "ImageNet-1k",
+        "batch_size": "64",
+        "optimizer": "SGD",
+        "learning_rate": "0.01",
+        "class_index_mapping": "torchvision_standard_v2"
+      },
+      "metrics": {
+        "accuracy": 0.842,
+        "mAP": 0.791,
+        "train_loss": 0.228,
+        "val_loss": 0.284,
+        "avg_latency_ms": 38
+      },
+      "tags": {
+        "mlflow.user": "MLOps Lead",
+        "mlflow.source.type": "TRAINING_PIPELINE",
+        "model_version": "v1.0.0-resnet18",
+        "status": "DEPLOYED_PRODUCTION"
+      },
+      "artifactUri": "/app/applet/mlruns/exp-001/run-resnet18-baseline-v1/artifacts"
+    },
+    {
+      "runId": "run-traffic-detector-v11",
+      "experimentId": "exp-001",
+      "runName": "yolov8-traffic-pedestrian-adaptation",
+      "status": "FINISHED",
+      "startTime": 1792326793662,
+      "endTime": 1792327573662,
+      "params": {
+        "backbone": "YOLOv8-Nano",
+        "target_domain": "Urban Traffic & Highway",
+        "batch_size": "32",
+        "optimizer": "AdamW",
+        "learning_rate": "0.001",
+        "weight_decay": "0.0005"
+      },
+      "metrics": {
+        "accuracy": 0.916,
+        "mAP": 0.884,
+        "train_loss": 0.165,
+        "val_loss": 0.198,
+        "avg_latency_ms": 46
+      },
+      "tags": {
+        "mlflow.user": "Autonomous Driving Team",
+        "mlflow.source.type": "TRAINING_PIPELINE",
+        "model_version": "v1.1.0-traffic-detector",
+        "status": "DEPLOYED_PRODUCTION"
+      },
+      "artifactUri": "/app/applet/mlruns/exp-001/run-traffic-detector-v11/artifacts"
+    },
+    {
+      "runId": "run-1792758793670-yma66",
+      "experimentId": "exp-001",
+      "runName": "audit-test-run",
+      "status": "FINISHED",
+      "startTime": 1792758793670,
+      "params": {
+        "backbone": "ResNet-18",
+        "batch_size": "32",
+        "lr": "0.001"
+      },
+      "metrics": {
+        "train_loss": 0.195,
+        "val_loss": 0.221,
+        "mAP": 0.902
+      },
+      "tags": {
+        "mlflow.source.type": "AUTOTRAIN_PIPELINE",
+        "triggeredBy": "TeamLeadAudit"
+      },
+      "artifactUri": "/app/applet/mlruns/exp-001/run-1792758793670-yma66/artifacts",
+      "endTime": 1792758793671
+    }
+  ],
+  "lastUpdated": "2026-10-23T12:33:13.671Z"
+}

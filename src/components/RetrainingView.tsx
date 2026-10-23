@@ -10,6 +10,10 @@ import {
   Sparkles,
   Database,
   ArrowRight,
+  GitBranch,
+  Download,
+  ShieldCheck,
+  AlertCircle,
 } from 'lucide-react';
 import type { RetrainingJob } from '../types/modelguard.ts';
 import { api } from '../services/api.ts';
@@ -31,6 +35,7 @@ export const RetrainingView: React.FC<RetrainingViewProps> = ({
   const [triggerSource, setTriggerSource] = useState<'MANUAL' | 'HUMAN_REVIEW_BATCH' | 'AUTO_DRIFT_THRESHOLD'>(
     'HUMAN_REVIEW_BATCH'
   );
+  const [isExporting, setIsExporting] = useState(false);
 
   const handleStartRetraining = async () => {
     setIsStarting(true);
@@ -41,6 +46,17 @@ export const RetrainingView: React.FC<RetrainingViewProps> = ({
       console.error('Failed to trigger retraining:', err);
     } finally {
       setIsStarting(false);
+    }
+  };
+
+  const handleExportCSV = async () => {
+    setIsExporting(true);
+    try {
+      await api.downloadAuditCSV();
+    } catch (err) {
+      console.error('CSV export failed:', err);
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -59,11 +75,19 @@ export const RetrainingView: React.FC<RetrainingViewProps> = ({
               </h2>
             </div>
             <p className="text-xs text-slate-400 mt-1 max-w-2xl">
-              Close the MLOps feedback loop. Automatically incorporate reviewed adverse weather images into fine-tuning checkpoints to adapt models to fog, rain, and novel camera sensors.
+              Close the MLOps feedback loop. Automatically incorporate reviewed adverse weather images into fine-tuning checkpoints to adapt models to fog, rain, and novel camera sensors with MLflow run tracking.
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleExportCSV}
+              disabled={isExporting}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 cursor-pointer disabled:opacity-50"
+            >
+              <Download className="w-3.5 h-3.5 text-emerald-400" />
+              <span>{isExporting ? 'Exporting...' : 'Export Audit CSV'}</span>
+            </button>
             <button
               onClick={handleStartRetraining}
               disabled={isStarting || Boolean(activeJob)}
@@ -121,12 +145,20 @@ export const RetrainingView: React.FC<RetrainingViewProps> = ({
                 <h3 className="font-bold text-white text-sm">
                   Active Training Job: {activeJob.id}
                 </h3>
-                <span className="text-xs text-slate-400">
-                  Target Candidate:{' '}
-                  <strong className="text-emerald-400 font-mono">
-                    {activeJob.candidateVersion}
-                  </strong>
-                </span>
+                <div className="flex items-center gap-2 text-xs text-slate-400">
+                  <span>
+                    Target Candidate:{' '}
+                    <strong className="text-emerald-400 font-mono">
+                      {activeJob.candidateVersion}
+                    </strong>
+                  </span>
+                  {activeJob.mlflowRunId && (
+                    <span className="text-indigo-400 font-mono flex items-center gap-1">
+                      <GitBranch className="w-3 h-3" />
+                      MLflow: {activeJob.mlflowRunId}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -204,16 +236,34 @@ export const RetrainingView: React.FC<RetrainingViewProps> = ({
                     {job.status}
                   </span>
                 </div>
-                <div className="text-xs text-slate-400 flex items-center gap-3">
+                <div className="text-xs text-slate-400 flex flex-wrap items-center gap-3">
                   <span>Trigger: {job.triggerSource}</span>
                   <span>•</span>
                   <span>Ingested: {job.newSamplesCount} samples</span>
                   <span>•</span>
                   <span>Started: {new Date(job.startedAt).toLocaleString()}</span>
+                  {job.mlflowRunId && (
+                    <span className="font-mono text-indigo-400">
+                      • MLflow Run: {job.mlflowRunId}
+                    </span>
+                  )}
                 </div>
+
+                {job.validationReport && (
+                  <div className="mt-2 text-[11px] text-slate-300 bg-slate-900/80 px-2.5 py-1 rounded border border-slate-800 flex items-center gap-2">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>
+                      Validation Gate Passed: Candidate mAP{' '}
+                      <strong className="text-emerald-400 font-mono">
+                        {(job.validationReport.candidateMAP * 100).toFixed(1)}%
+                      </strong>{' '}
+                      (Baseline: {(job.validationReport.baselineMAP * 100).toFixed(1)}%, Gain: +{(job.mAPDelta * 100).toFixed(1)}%)
+                    </span>
+                  </div>
+                )}
               </div>
 
-              <div className="flex items-center gap-4 text-xs font-mono">
+              <div className="flex items-center gap-4 text-xs font-mono shrink-0">
                 <div>
                   <span className="text-slate-500 block text-[10px]">TRAIN / VAL LOSS</span>
                   <span className="text-slate-200">

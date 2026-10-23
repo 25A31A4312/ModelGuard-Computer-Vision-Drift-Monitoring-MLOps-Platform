@@ -9,6 +9,7 @@ import {
   ShieldAlert,
   ArrowRight,
   Sliders,
+  Download,
 } from 'lucide-react';
 import type { AlertItem, AlertSeverity, AlertStatus, AlertType } from '../types/modelguard.ts';
 import { api } from '../services/api.ts';
@@ -60,9 +61,16 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onAlertUpdated }
             </p>
           </div>
 
-          {/* Quick counts */}
+          {/* Quick counts & Export */}
           <div className="flex items-center gap-2">
-            <span className="px-3 py-1 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs font-semibold">
+            <button
+              onClick={() => api.downloadAuditCSV()}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-all cursor-pointer shadow-sm"
+            >
+              <Download className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Export Audit CSV</span>
+            </button>
+            <span className="px-3 py-1.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs font-semibold">
               {openTotal} Open Alerts
             </span>
           </div>

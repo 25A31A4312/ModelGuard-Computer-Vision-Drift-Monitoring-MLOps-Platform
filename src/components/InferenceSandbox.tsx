@@ -38,19 +38,26 @@ export const InferenceSandbox: React.FC<InferenceSandboxProps> = ({ onInferenceC
   // Convert image URL to base64 for API submission
   const convertUrlToBase64 = async (url: string): Promise<string> => {
     if (url.startsWith('data:')) return url;
-    const response = await fetch(url);
-    const blob = await response.blob();
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const blob = await response.blob();
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch {
+      // Remote URL blocked by CORS in client browser: pass URL directly to server
+      return url;
+    }
   };
 
-  const handleRunInference = async (imageSrc?: string) => {
+  const handleRunInference = async (imageSrc?: string, overrideModel?: ModelType) => {
     const src = imageSrc || selectedImage;
     if (!src) return;
+    const activeModel = overrideModel || modelType;
 
     setIsLoading(true);
     setErrorMsg(null);
@@ -58,7 +65,7 @@ export const InferenceSandbox: React.FC<InferenceSandboxProps> = ({ onInferenceC
 
     try {
       const base64Data = await convertUrlToBase64(src);
-      const result = await api.runInference(base64Data, 'image/jpeg', modelType);
+      const result = await api.runInference(base64Data, 'image/jpeg', activeModel);
       setInferenceResult(result);
       onInferenceCompleted(result);
     } catch (err: any) {
@@ -118,7 +125,7 @@ export const InferenceSandbox: React.FC<InferenceSandboxProps> = ({ onInferenceC
             <button
               onClick={() => {
                 setModelType('resnet18_classifier');
-                if (selectedImage) handleRunInference(selectedImage);
+                if (selectedImage) handleRunInference(selectedImage, 'resnet18_classifier');
               }}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                 modelType === 'resnet18_classifier'
@@ -126,12 +133,12 @@ export const InferenceSandbox: React.FC<InferenceSandboxProps> = ({ onInferenceC
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              ResNet-18 Classifier (Fixed Mapping)
+              ResNet-18 Classifier (ImageNet)
             </button>
             <button
               onClick={() => {
                 setModelType('traffic_object_detector');
-                if (selectedImage) handleRunInference(selectedImage);
+                if (selectedImage) handleRunInference(selectedImage, 'traffic_object_detector');
               }}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                 modelType === 'traffic_object_detector'
@@ -139,7 +146,7 @@ export const InferenceSandbox: React.FC<InferenceSandboxProps> = ({ onInferenceC
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              Traffic &amp; Road Detector (BBoxes)
+              Traffic &amp; Road Detector (YOLOv8)
             </button>
           </div>
         </div>
