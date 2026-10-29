@@ -218,4 +218,4 @@ Choose and add an appropriate open-source license before distributing the projec
 **ModelGuard — Monitor. Evaluate. Improve.**
 
 here is the project demo link 🔗
-       https://modelguard-computer-vision-drift-monitoring-mlops.ai.studio
+       https://modelguard-y2i1.onrender.com
